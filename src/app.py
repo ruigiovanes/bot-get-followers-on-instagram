@@ -11,11 +11,8 @@ class InstagramBot:
 
     def __init__(self):
         self.username = ConfigExtension.get('AUTH')['username']
-        self.password = ConfigExtension.get('AUTH')['password'][1:-1]
-        self.target_profile = ConfigExtension.get('TARGET')['profile']
-        self.hashtag = ConfigExtension.get('TARGET')['hashtag']
-        self.comment = ConfigExtension.get('INFO')['comment'][1:-1]
-        self.number_of_comments = int(ConfigExtension.get('SETTINGS')['number_of_comments'])
+        self.password = ConfigExtension.get('AUTH')['password'][1:-1]        
+        self.hashtag = ConfigExtension.get('TARGET')['hashtag']        
         self.number_of_times_to_scroll_feed = int(ConfigExtension.get('SETTINGS')['number_of_times_to_scroll_feed'])
 
         self.driver = webdriver.Firefox(

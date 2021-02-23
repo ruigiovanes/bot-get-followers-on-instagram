@@ -109,6 +109,5 @@ venv.bak/
 
 *.log
 *.exe
-*.ini
 
 /src/config.ini
