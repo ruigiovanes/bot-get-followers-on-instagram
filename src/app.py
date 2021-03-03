@@ -1,7 +1,10 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+
 import time
-import random
+import os
 
 from util.config_extension import ConfigExtension
 
@@ -15,9 +18,33 @@ class InstagramBot:
         self.hashtag = ConfigExtension.get('TARGET')['hashtag']        
         self.number_of_times_to_scroll_feed = int(ConfigExtension.get('SETTINGS')['number_of_times_to_scroll_feed'])
 
-        self.driver = webdriver.Firefox(
-            executable_path=r'D:\Projetos\Python\Automação\Drivers\geckodriver.exe'
-        )
+        self.driver = None
+        try:
+            if (self.is_docker_container()):
+                self.set_chrome_options()
+
+                self.driver = webdriver.Chrome(
+                    executable_path=ConfigExtension.get('PATH')['driver_docker'],
+                    options=self.set_chrome_options())
+            else:
+                self.driver = webdriver.Chrome(ChromeDriverManager().install())
+        except Exception as e:
+            print(e)
+
+    def is_docker_container(self):
+        return os.environ.get('DOCKER_CONTAINER', False)
+
+    def set_chrome_options(self) -> None:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--window-size=1235,768")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_prefs = {}
+        chrome_options.experimental_options["prefs"] = chrome_prefs
+        chrome_prefs["profile.default_content_settings"] = {"images": 2}
+
+        return chrome_options
 
     def login(self):
         driver = self.driver
@@ -65,10 +92,13 @@ class InstagramBot:
     def get_posts_and_follow_people_who_commented(self):
         driver = self.driver
 
-        count = 1
+        count = 0
         while True:
             posts_links = self.get_posts()
-            for post_link in posts_links:
+            for i, post_link in enumerate(posts_links):
+                if i == 30:
+                    time.sleep(60 * 5)
+
                 driver.get(post_link)
 
                 time.sleep(3)
@@ -84,7 +114,7 @@ class InstagramBot:
             self.scroll_over_feed()
 
             count = count + 1
-            if (count > self.number_of_times_to_scroll_feed):
+            if (count == self.number_of_times_to_scroll_feed):
                 break
     
     def get_posts(self):
@@ -129,8 +159,13 @@ class InstagramBot:
                 follow_button.click()
 
                 time.sleep(2)
+
+                self.store_followed_people_username(profile)
             except Exception as err:
                 continue
+
+    def store_followed_people_usernames(profile: str):
+        print()
 
     def scroll_over_feed(self):
         driver = self.driver

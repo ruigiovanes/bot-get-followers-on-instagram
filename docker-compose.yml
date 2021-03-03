@@ -1,0 +1,13 @@
+version: "3.10"
+services:
+  app:
+    build:
+      context: ./
+      target: debug
+    volumes:
+      - ./src/:/work
+    ports:
+      - 5003:5000
+      - 5678:5678
+  db:
+    build: ./src/repository/

@@ -111,3 +111,4 @@ venv.bak/
 *.exe
 
 /src/config.ini
+/driver
