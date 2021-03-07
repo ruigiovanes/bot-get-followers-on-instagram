@@ -1,55 +1,34 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
+from datetime import datetime
 
 import time
-import os
 
 from util.config_extension import ConfigExtension
+from util.file_extension import FileExtension
 
-class InstagramBot:
-    posts_finished = []
+class InstagramBot:    
     users_to_follow = []
+    date_start_execution = datetime.now().strftime("%m%d%Y%H%M%S")
 
     def __init__(self):
         self.username = ConfigExtension.get('AUTH')['username']
         self.password = ConfigExtension.get('AUTH')['password'][1:-1]        
-        self.hashtag = ConfigExtension.get('TARGET')['hashtag']        
+        self.hashtag = ConfigExtension.get('TARGET')['hashtag']
+        self.posts_finished_filepath = 'posts\\' + 'posts_finished_' + self.date_start_execution + '.txt'
+        self.users_followed_filepath = 'users\\' + 'users_followed_' + self.date_start_execution + '.txt'
         self.number_of_times_to_scroll_feed = int(ConfigExtension.get('SETTINGS')['number_of_times_to_scroll_feed'])
 
-        self.driver = None
-        try:
-            if (self.is_docker_container()):
-                self.set_chrome_options()
+        FileExtension.create_file(self.posts_finished_filepath, '------- posts finished -------\n')
+        FileExtension.create_file(self.users_followed_filepath, '------- users followed -------\n')
 
-                self.driver = webdriver.Chrome(
-                    executable_path=ConfigExtension.get('PATH')['driver_docker'],
-                    options=self.set_chrome_options())
-            else:
-                self.driver = webdriver.Chrome(ChromeDriverManager().install())
-        except Exception as e:
-            print(e)
-
-    def is_docker_container(self):
-        return os.environ.get('DOCKER_CONTAINER', False)
-
-    def set_chrome_options(self) -> None:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--window-size=1235,768")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_prefs = {}
-        chrome_options.experimental_options["prefs"] = chrome_prefs
-        chrome_prefs["profile.default_content_settings"] = {"images": 2}
-
-        return chrome_options
+        self.driver = webdriver.Chrome(ChromeDriverManager().install())
 
     def login(self):
         driver = self.driver
         driver.get("https://www.instagram.com")
-        
+
         time.sleep(3)
 
         try:
@@ -78,10 +57,9 @@ class InstagramBot:
         time.sleep(3)
 
     def find_profile(self, profile: str):
-        driver = self.driver
+        driver = self.driver        
+
         driver.get(f"https://www.instagram.com/{profile}/")
-        
-        time.sleep(3)
 
     def search_posts_by_hashtag(self):
         driver = self.driver
@@ -94,19 +72,20 @@ class InstagramBot:
 
         count = 0
         while True:
-            posts_links = self.get_posts()
-            for i, post_link in enumerate(posts_links):
+            posts_urls = self.get_posts()
+            
+            for i, post_url in enumerate(posts_urls):
                 if i == 30:
                     time.sleep(60 * 5)
 
-                driver.get(post_link)
+                driver.get(post_url)
 
                 time.sleep(3)
 
                 try:
                     self.find_people_on_comments_and_follow()
 
-                    self.posts_finished.append(post_link)
+                    self.store_finished_posts(post_url)
                 except Exception as e:
                     print(e)
                     time.sleep(5)
@@ -120,11 +99,23 @@ class InstagramBot:
     def get_posts(self):
         driver = self.driver
 
-        posts_elements = driver.find_elements_by_tag_name("a")
-        posts_links = [elem.get_attribute("href") for elem in posts_elements]
-        posts_links = [link for link in posts_links if 'https://www.instagram.com/p' in link and link not in self.posts_finished]
+        posts_finished = FileExtension.read_lines_all_files_on_folder('posts')
 
-        return posts_links    
+        posts_urls = []
+        while len(posts_urls) < 32:    
+            posts_elements = driver.find_elements_by_tag_name("a")
+
+            posts_urls = [elem.get_attribute("href") for elem in posts_elements]
+            posts_urls = [
+                    link for link in posts_urls
+                    if 'https://www.instagram.com/p' in link
+                        and (link not in posts_finished)
+                ]
+
+            if len(posts_urls) < 32:
+                self.scroll_over_feed()
+
+        return posts_urls    
 
     def find_people_on_comments_and_follow(self):
         driver = self.driver
@@ -154,18 +145,35 @@ class InstagramBot:
         for profile in self.users_to_follow:
             self.find_profile(profile)
 
+            time.sleep(2)
+
             try:
-                follow_button = driver.find_element_by_xpath("//button[contains(text(), 'Seguir')]")
-                follow_button.click()
+                already_followed_user = driver.find_element_by_xpath("//span[contains(@class, 'vBF20')]/button/div/span[contains(@class, 'glyphsSpriteFriend_Follow u-__7')]")
 
-                time.sleep(2)
-
-                self.store_followed_people_username(profile)
+                self.store_followed_users(profile)
             except Exception as err:
                 continue
 
-    def store_followed_people_usernames(profile: str):
-        print()
+            try:
+                time.sleep(2)
+
+                follow_button = driver.find_element_by_xpath("//span[contains(@class, 'vBF20')]/button")
+
+                time.sleep(2)
+
+                follow_button.click()
+
+                self.store_followed_users(profile)
+
+                time.sleep(2)                
+            except Exception as err:
+                continue    
+
+    def store_finished_posts(self, url: str):
+        FileExtension.append_to_file(self.posts_finished_filepath, url + '\n')
+
+    def store_followed_users(self, url: str):
+        FileExtension.append_to_file(self.users_followed_filepath, url + '\n')
 
     def scroll_over_feed(self):
         driver = self.driver
